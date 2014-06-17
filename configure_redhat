@@ -9,7 +9,7 @@ echo "*"
 echo "* Another option would be to run ccmake or cmake-gui"
 echo "* and select the options you care to build with"
 echo "-------------------------------------------------------------------"
-cmake -D_DEBUG:BOOL=TRUE \
+${CMAKE-cmake} -D_DEBUG:BOOL=TRUE \
   -DNO_PHONE_HOME:BOOL=TRUE \
   -DHAVE_BACKFILL:BOOL=FALSE \
   -DHAVE_BOINC:BOOL=FALSE \
