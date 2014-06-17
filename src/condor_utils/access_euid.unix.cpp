@@ -21,10 +21,11 @@
 #define _FILE_OFFSET_BITS 64
 #include "condor_common.h"
 #include "condor_debug.h"
+#include <fcntl.h>
 #include <dirent.h>
 
 
-static int access_euid_dir(char const *path,int mode,struct stat *statbuf)
+static int access_euid_dir(char const *path,int mode)
 {
 	errno = 0;
 
@@ -69,33 +70,14 @@ static int access_euid_dir(char const *path,int mode,struct stat *statbuf)
 	}
 
 	if ((X_OK == 0) || (mode & X_OK)) {
-		struct stat st;
-		if (!statbuf) {
-			/* stats are expensive, so only do it if I have to */
-			if (stat(path, &st) < 0) {
-				if( ! errno ) {
-					dprintf( D_ALWAYS, "WARNING: stat() failed, but "
-							 "errno is still 0!  Beware of misleading "
-							 "error messages\n" );
-				}
-				return -1;
-			}
-			statbuf = &st;
-		}
-		int bit = 0;
-		if( statbuf->st_uid == geteuid() ) {
-			bit |= S_IXUSR;
-		}
-		else if( statbuf->st_gid == getegid() ) {
-			bit |= S_IXGRP;
-		}
-		else {
-			bit |= S_IXOTH;
-		}
-		if (!(statbuf->st_mode & bit)) {
-			errno = EACCES;
-			return -1;
-		}
+		int back;
+		back = open(".", O_RDONLY);
+		if (chdir(path) != 0)
+			return -1;     /* errno was set by chdir() */
+
+		/* chdir succeeded, so this effective user has access */
+		fchdir(back);
+		close(back);
 	}
 
 	return 0;
@@ -142,7 +124,7 @@ access_euid(const char *path, int mode)
 		already_stated = 1;
 
 		if( buf.st_mode & S_IFDIR ) {
-			return access_euid_dir(path,mode,&buf);
+			return access_euid_dir(path,mode);
 		}
 	}
 
@@ -150,7 +132,7 @@ access_euid(const char *path, int mode)
 		f = safe_fopen_wrapper_follow(path, "r", 0644);
 		if (f == NULL) {
 			if( errno == EISDIR ) {
-				return access_euid_dir(path,mode,NULL);
+				return access_euid_dir(path,mode);
 			}
 			if( ! errno ) {
 				dprintf( D_ALWAYS, "WARNING: safe_fopen_wrapper() failed, but "
@@ -166,7 +148,7 @@ access_euid(const char *path, int mode)
 		f = safe_fopen_wrapper_follow(path, "a", 0644); /* don't truncate the file! */
 		if (f == NULL) {
 			if( errno == EISDIR ) {
-				return access_euid_dir(path,mode,NULL);
+				return access_euid_dir(path,mode);
 			}
 			if( ! errno ) {
 				dprintf( D_ALWAYS, "WARNING: safe_fopen_wrapper() failed, but "
@@ -190,7 +172,7 @@ access_euid(const char *path, int mode)
 				return -1;
 			}
 			if( buf.st_mode & S_IFDIR ) {
-				return access_euid_dir(path,mode,&buf);
+				return access_euid_dir(path,mode);
 			}
 		}
 		if (!(buf.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
